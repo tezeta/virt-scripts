@@ -6,7 +6,7 @@
 # Shuts down the VM specified in NAME and waits for it to finish shutting down
 #
 if [[ -z $1 ]]; then
-	echo "hibernate-vm: requires an argument (vm-name)"
+	echo "shutdown-vm: requires an argument (vm-name)"
 	exit
 fi
 
