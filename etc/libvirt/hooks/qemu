@@ -1,0 +1,90 @@
+#!/bin/bash
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
+VM_NAME=$1
+VM_ACTION=$2
+
+SUBOPERATION=$3
+EXTRA_ARG=$4
+
+VM_TITLE=`grep -lR "<name>$VM_NAME</name>" /etc/libvirt/qemu/* | xargs grep title`
+
+RSET=/
+HSET=/host.slice
+HNODE='C0,4'
+MSET=/machine.slice
+MNODE='C1-3,5-7'
+OUTDIR=/etc/libvirt/vfio-isolate
+UNDOFILE=vfio-isolate.run
+LOGFILE=vfio-isolate.log
+
+shield_vm() {
+	vfio-isolate \
+		-v -u $OUTDIR/$UNDOFILE \
+                drop-caches \
+                compact-memory \
+                cpuset-create --cpus $HNODE $HSET \
+                cpuset-create --cpus $MNODE -nlb $MSET \
+                move-tasks $RSET $HSET \
+		irq-affinity mask $MNODE &>> $OUTDIR/$LOGFILE
+}
+
+unshield_vm() {
+            vfio-isolate \
+		-v restore $OUTDIR/$UNDOFILE &>> $OUTDIR/$LOGFILE
+	    rm $OUTDIR/$UNDOFILE		
+}
+
+calc_hugepages() {
+	HUGEPAGES_SIZE=$(grep Hugepagesize /proc/meminfo | awk '{print $2}')
+	HUGEPAGES_SIZE=$(($HUGEPAGES_SIZE * 1024))
+	HUGEPAGES_ALLOCATED=$(sysctl vm.nr_hugepages | awk {'print $3'})
+	HUGEPAGES_HIDDEN=$(($(grep HugePages_Total /proc/meminfo | awk '{print $2}')-$(grep HugePages_Free /proc/meminfo | awk '{print $2}')))
+}
+
+#For manual invocation
+if [[ $VM_NAME == 'shield' ]];
+	then
+	    shield_vm
+	    exit 0
+elif [[ $VM_NAME == 'unshield' ]];
+	then
+	    unshield_vm
+	    exit 0
+fi
+
+############################
+#cpu pinning
+
+if [[ $VM_TITLE == *"(VFIO)"* ]]
+then
+	calc_hugepages
+	cd $(dirname "$0")
+	VM_HUGEPAGES_NEED=$(($(./vm-mem-requirements $VM_NAME) / $HUGEPAGES_SIZE))
+	
+	case $VM_ACTION in
+	"prepare")
+		sync
+	   	echo 3 > /proc/sys/vm/drop_caches 
+		echo 1 > /proc/sys/vm/compact_memory 
+		shield_vm
+		
+		grep vfio /proc/interrupts | cut -d':' -f 1 | while read -r i ; do
+			echo "set mask 11 to irq $i"
+			echo 11 >/proc/irq/$i/smp_affinity
+		done
+		
+		VM_HUGEPAGES_TOTAL=$(($HUGEPAGES_ALLOCATED + $VM_HUGEPAGES_NEED + $HUGEPAGES_HIDDEN + 1))
+	    	sysctl vm.nr_hugepages=$VM_HUGEPAGES_TOTAL
+		;;
+
+	"release")
+	    	VM_HUGEPAGES_TOTAL=$(($HUGEPAGES_ALLOCATED - $VM_HUGEPAGES_NEED - $HUGEPAGES_HIDDEN - 1))
+	    	VM_HUGEPAGES_TOTAL=$(($VM_HUGEPAGES_TOTAL<0?0:$VM_HUGEPAGES_TOTAL))
+	    	sysctl vm.nr_hugepages=$VM_HUGEPAGES_TOTAL
+	    	unshield_vm
+	    	;;
+
+	esac	  
+fi

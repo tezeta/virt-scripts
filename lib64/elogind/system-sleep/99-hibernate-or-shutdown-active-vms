@@ -1,0 +1,30 @@
+#!/bin/sh
+
+getRunning() {
+	export RUNNING=$(virsh list --state-running --name | awk 'NF')
+}
+
+hibernateVM() {
+	getRunning
+	for i in $RUNNING; do
+		/usr/local/bin/hibernate-vm $i
+	done
+}
+
+shutdownVM() {
+	getRunning
+	for i in $RUNNING; do
+		/usr/local/bin/shutdown-vm $i
+	done
+}
+
+case $1/$2 in
+  pre/*)
+    # Put here any commands you want to be run when suspending or hibernating.
+    hibernateVM
+    shutdownVM
+    ;;
+  post/*)
+    # Put here any commands you want to be run when resuming from suspension or thawing from hibernation.
+    ;;
+esac

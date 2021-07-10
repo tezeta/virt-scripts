@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#
+# Usage: hibernate-vm NAME
+#
+# Hibernates the VM specified in NAME and waits for it to finish shutting down
+#
+if [[ -z $1 ]]; then
+	echo "hibernate-vm: requires an argument (vm-name)"
+	exit
+fi
+
+if virsh -c qemu:///system dompmsuspend "$1" disk; then
+	echo "Waiting for domain to finish shutting down.." >&2
+	while ! [ "$(virsh -c qemu:///system domstate "$1")" == 'shut off' ]; do
+		sleep 1
+	done
+	echo "Domain finished shutting down" >&2
+fi

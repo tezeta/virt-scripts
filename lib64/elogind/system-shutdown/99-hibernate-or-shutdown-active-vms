@@ -1,0 +1,22 @@
+#!/bin/sh
+
+getRunning() {
+	export RUNNING=$(virsh list --state-running --name | awk 'NF')
+}
+
+hibernateVM() {
+	getRunning
+	for i in $RUNNING; do
+		/usr/local/bin/hibernate-vm $i
+	done
+}
+
+shutdownVM() {
+	getRunning
+	for i in $RUNNING; do
+		/usr/local/bin/shutdown-vm $i
+	done
+}
+
+hibernateVM
+shutdownVM
