@@ -8,7 +8,9 @@ VM_ACTION=$2
 SUBOPERATION=$3
 EXTRA_ARG=$4
 
-VM_TITLE=`grep -lR "<name>$VM_NAME</name>" /etc/libvirt/qemu/* | xargs grep title`
+#Use these to identify when you want to use pinning, i.e. adding (VFIO) to a VM's title or description
+VM_TITLE=`xmllint --noblanks --xpath '//domain/title' /etc/libvirt/qemu/$VM_NAME.xml | tr -d '\n'`
+VM_DESC=`xmllint --noblanks --xpath '//domain/description' /etc/libvirt/qemu/$VM_NAME.xml | tr -d '\n'`
 
 RSET=/
 HSET=/host.slice
